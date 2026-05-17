@@ -1,4 +1,4 @@
-const CACHE = 'doseis-v2'; // Αυξήσαμε την έκδοση cache
+const CACHE = 'doseis-v1';
 const ASSETS = ['./index.html', './manifest.json'];
 
 self.addEventListener('install', e => {
@@ -12,10 +12,5 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // ΠΡΟΣΟΧΗ: Μην κάνεις cache τα αιτήματα προς την Google (Auth και Drive API)
-  if (e.request.url.includes('googleapis.com') || e.request.url.includes('google.com')) {
-    return; // Άφησε το fetch να πάει κατευθείαν στο internet
-  }
-
   e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
 });

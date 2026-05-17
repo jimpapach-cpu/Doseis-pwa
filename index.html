@@ -7,13 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Δόσεις">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest.json" crossorigin="use-credentials">
 <title>Δόσεις Πιστωτικών</title>
-
-<!-- Google API & Identity Services Scripts -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="https://apis.google.com/js/api.js" async defer></script>
-
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -75,7 +70,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .inst-icon{width:36px;height:36px;border-radius:8px;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .inst-main{flex:1;min-width:0}
 .inst-store{font-size:13px;font-weight:600;color:var(--text)}
-.inst-product覆{font-size:12px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inst-product{font-size:12px;color:var(--text2);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .inst-row{display:flex;align-items:center;justify-content:space-between;margin-top:8px;gap:8px;flex-wrap:wrap}
 .inst-amt{font-size:17px;font-weight:700;color:var(--red)}
 .inst-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px}
@@ -95,27 +90,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .card-add-btn{display:flex;align-items:center;gap:6px;width:100%;padding:10px 16px;background:none;border:none;color:var(--blue);font-size:13px;cursor:pointer;border-top:1px solid var(--border)}
 .bank-add-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;background:none;border:2px dashed var(--border);border-radius:var(--radius);color:var(--text3);font-size:14px;cursor:pointer;margin-bottom:14px}
 .bank-add-btn:active{background:var(--surface)}
-
-/* Cloud Sync UI Bar */
-.cloud-bar {
-  background: var(--surface2);
-  padding: 8px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  border-bottom: 1px solid var(--border);
-}
-.cloud-btn {
-  background: var(--blue);
-  color: white;
-  border: none;
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-weight: 500;
-}
-.cloud-btn.out { background: var(--text2); }
 
 /* Modal */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:flex-end;justify-content:center}
@@ -143,17 +117,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <div class="top">
   <div class="top-inner">
     <h1>💳 <span>Δόσεις</span> Πιστωτικών</h1>
-    <div style="display:flex;align-items:center;gap:10px">
-      <div id="inst-count" style="font-size:13px;color:var(--text3)"></div>
-      <button onclick="exportExcel()" style="display:flex;align-items:center;gap:5px;font-size:13px;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--green-bg);color:var(--green-txt);cursor:pointer;font-weight:500">📊 Excel</button>
-    </div>
+    <div id="inst-count" style="font-size:13px;color:var(--text3)"></div>
   </div>
-</div>
-
-<!-- Cloud Synchronization Bar -->
-<div class="cloud-bar">
-  <span id="cloud-status">☁️ Τοπική αποθήκευση</span>
-  <button id="cloud-btn" class="cloud-btn" onclick="handleAuthClick()">Σύνδεση Drive</button>
 </div>
 
 <div class="content">
@@ -225,19 +190,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <script>
-// --- GOOGLE DRIVE CONFIGURATION ---
-const CLIENT_ID = 236907527331-vh1mic9ftadorp7obduhprsffkfcce2v.apps.googleusercontent.com ;
-const API_KEY = AIzaSyCaasTbG9oLCajcPA6hLFrEc7SrJX_qCfw;
-const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
-const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-const FILE_NAME = 'doseis_data.json';
-
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
-let driveFileId = null; 
-let accessToken = null;
-
 const COLORS=['#178BCA','#E24B4A','#1D9E75','#BA7517','#534AB7','#D4537E'];
 const STORE_ICONS={'πλαίσιο':'🖥️','media':'📺','ikea':'🛋️','leroy':'🔨','kotsovolos':'📱','jumbo':'🧸','zara':'👗','ab':'🛒','sklavenitis':'🛒'};
 function storeIcon(n){const k=n.toLowerCase();for(const[p,i] of Object.entries(STORE_ICONS))if(k.includes(p))return i;return'🏪'}
@@ -262,15 +214,7 @@ let data=JSON.parse(localStorage.getItem('doseis-pwa-v1')||'null')||{banks:{
 let nextId=100;
 let collapsed={};
 let editTarget=null;
-
-// Τροποποιημένη save για να συγχρονίζει και στο Drive
-async function save(){
-  localStorage.setItem('doseis-pwa-v1', JSON.stringify(data));
-  if (accessToken) {
-    updateCloudStatus("⏳ Συγχρονισμός...");
-    await saveToGoogleDrive();
-  }
-}
+function save(){localStorage.setItem('doseis-pwa-v1',JSON.stringify(data))}
 
 function allInsts(){
   const a=[];
@@ -463,186 +407,11 @@ function deleteInst(bn,cn,id){
 
 function render(){renderSummary();renderBanks()}
 
-function exportExcel(){
-  if(typeof XLSX==='undefined'){
-    const s=document.createElement('script');
-    s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-    s.onload=()=>doExport();
-    document.head.appendChild(s);
-  } else doExport();
-}
-
-function doExport(){
-  const wb=XLSX.utils.book_new();
-  const fmtN=n=>parseFloat(Number(n).toFixed(2));
-  const fmtDx=s=>{if(!s)return'';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`};
-
-  const summaryRows=[['Τράπεζα','Κάρτα','Κατάστημα','Προϊόν','Δόση (€)','Σύνολο Δόσεων','Πληρωμένες','Υπολοιπόμενες','Υπόλοιπο Ποσό (€)','Επόμενη Δόση']];
-  Object.entries(data.banks).forEach(([bn,bank])=>{
-    Object.entries(bank.cards).forEach(([cn,insts])=>{
-      insts.forEach(i=>{
-        const rem=i.total-i.paid;
-        summaryRows.push([bn,cn,i.store,i.product,fmtN(i.amt),i.total,i.paid,rem,fmtN(i.amt*rem),fmtDx(i.nextDate)]);
-      });
-    });
-  });
-  const all=allInsts();
-  summaryRows.push([]);
-  summaryRows.push(['','','','','Μηνιαία υποχρέωση:',fmtN(all.reduce((s,i)=>s+i.amt,0)),'','Συνολικό υπόλοιπο:',fmtN(all.reduce((s,i)=>s+i.amt*(i.total-i.paid),0)),'']);
-
-  const ws=XLSX.utils.aoa_to_sheet(summaryRows);
-  ws['!cols']=[{wch:16},{wch:22},{wch:16},{wch:20},{wch:12},{wch:14},{wch:12},{wch:14},{wch:18},{wch:14}];
-
-  const hStyle={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'178BCA'}},alignment:{horizontal:'center'}};
-  ['A1','B1','C1','D1','E1','F1','G1','H1','I1','J1'].forEach(c=>{if(ws[c])ws[c].s=hStyle});
-
-  Object.entries(data.banks).forEach(([bn,bank])=>{
-    const bankInsts=Object.values(bank.cards).flat();
-    const bRows=[['Κατάστημα','Προϊόν','Κάρτα','Δόση (€)','Σύνολο','Πληρωμένες','Υπολοιπόμενες','Υπόλοιπο (€)','Επόμενη Δόση']];
-    bankInsts.forEach(i=>{
-      const cn=Object.entries(bank.cards).find(([,ii])=>ii.some(x=>x.id===i.id))[0];
-      bRows.push([i.store,i.product,cn,fmtN(i.amt),i.total,i.paid,i.total-i.paid,fmtN(i.amt*(i.total-i.paid)),fmtDx(i.nextDate)]);
-    });
-    bRows.push([]);
-    bRows.push(['Μηνιαία:',fmtN(bankInsts.reduce((s,i)=>s+i.amt,0)),'Υπόλοιπο:',fmtN(bankInsts.reduce((s,i)=>s+i.amt*(i.total-i.paid),0))]);
-    const bws=XLSX.utils.aoa_to_sheet(bRows);
-    bws['!cols']=[{wch:16},{wch:20},{wch:22},{wch:12},{wch:10},{wch:12},{wch:14},{wch:16},{wch:14}];
-    XLSX.utils.book_append_sheet(wb,bws,bn.substring(0,31));
-  });
-
-  XLSX.utils.book_append_sheet(wb,ws,'Σύνοψη',true);
-  wb.SheetNames.unshift(wb.SheetNames.pop());
-
-  const now=new Date();
-  const fname=`doseis_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.xlsx`;
-  XLSX.writeFile(wb,fname);
-}
-
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
 }
 
 render();
-
-// --- GOOGLE DRIVE LOGIC ---
-
-window.onload = function() {
-  gapi.load('client', initializeGapiClient);
-  
-  tokenClient = google.accounts.oauth2.initTokenClient({
-    client_id: CLIENT_ID,
-    scope: SCOPES,
-    callback: async (resp) => {
-      if (resp.error !== undefined) {
-        throw (resp);
-      }
-      accessToken = resp.access_token;
-      document.getElementById('cloud-btn').innerText = 'Αποσύνδεση';
-      document.getElementById('cloud-btn').classList.add('out');
-      updateCloudStatus("⏳ Φόρτωση από Drive...");
-      await syncDataFromDrive();
-    },
-  });
-  gisInited = true;
-}
-
-async function initializeGapiClient() {
-  await gapi.client.init({
-    apiKey: API_KEY,
-    discoveryDocs: [DISCOVERY_DOC],
-  });
-  gapiInited = true;
-}
-
-function handleAuthClick() {
-  if (accessToken === null) {
-    // Request a time bound access token
-    tokenClient.requestAccessToken({prompt: 'consent'});
-  } else {
-    // Revoke and Logout
-    google.accounts.oauth2.revokeToken(accessToken);
-    accessToken = null;
-    driveFileId = null;
-    document.getElementById('cloud-btn').innerText = 'Σύνδεση Drive';
-    document.getElementById('cloud-btn').classList.remove('out');
-    updateCloudStatus("☁️ Τοπική αποθήκευση");
-  }
-}
-
-function updateCloudStatus(msg) {
-  document.getElementById('cloud-status').innerText = msg;
-}
-
-// Αναζήτηση αν υπάρχει ήδη το αρχείο στο Drive, αλλιώς κατέβασμα δεδομένων
-async function syncDataFromDrive() {
-  try {
-    const response = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${FILE_NAME}' and trashed=false`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    const result = await response.json();
-    
-    if (result.files && result.files.length > 0) {
-      driveFileId = result.files[0].id;
-      // Λήψη περιεχομένου αρχείου
-      const fileResponse = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?alt=media`, {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-      const cloudData = await fileResponse.json();
-      
-      // Ρωτάμε τον χρήστη αν θέλει να αντικαταστήσει τα τοπικά δεδομένα
-      if (confirm("Βρέθηκαν δεδομένα στο Google Drive! Θέλετε να τα φορτώσετε στην εφαρμογή; (Τα τρέχοντα τοπικά δεδομένα θα αντικατασταθούν)")) {
-        data = cloudData;
-        localStorage.setItem('doseis-pwa-v1', JSON.stringify(data));
-        render();
-      }
-    } else {
-      // Αν δεν υπάρχει, το δημιουργούμε με τα υπάρχοντα τοπικά δεδομένα
-      await saveToGoogleDrive();
-    }
-    updateCloudStatus("✅ Συγχρονισμένο με Drive");
-  } catch (err) {
-    console.error(err);
-    updateCloudStatus("❌ Σφάλμα συγχρονισμού");
-  }
-}
-
-// Ανέβασμα/Ενημέρωση του αρχείου JSON στο Drive
-async function saveToGoogleDrive() {
-  if (!accessToken) return;
-
-  const metadata = {
-    name: FILE_NAME,
-    mimeType: 'application/json'
-  };
-
-  const fileBlob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-  const formData = new FormData();
-  formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-  formData.append('file', fileBlob);
-
-  let url = 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart';
-  let method = 'POST';
-
-  // Αν το αρχείο υπάρχει ήδη, κάνουμε UPDATE (PATCH) αντί για δημιουργία νέου
-  if (driveFileId) {
-    url = `https://www.googleapis.com/upload/drive/v3/files/${driveFileId}?uploadType=multipart`;
-    method = 'PATCH';
-  }
-
-  try {
-    const response = await fetch(url, {
-      method: method,
-      headers: { 'Authorization': `Bearer ${accessToken}` },
-      body: formData
-    });
-    const result = await response.json();
-    if (!driveFileId) driveFileId = result.id;
-    updateCloudStatus("✅ Αποθηκεύτηκε στο Drive");
-  } catch (err) {
-    console.error(err);
-    updateCloudStatus("❌ Αποτυχία αποθήκευσης στο Cloud");
-  }
-}
 </script>
 </body>
 </html>
