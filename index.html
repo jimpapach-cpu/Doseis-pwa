@@ -118,9 +118,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 <div class="top">
   <div class="top-inner">
     <h1>💳 <span>Δόσεις</span> Πιστωτικών</h1>
-    <div style="display:flex;align-items:center;gap:10px">
+    <div style="display:flex;align-items:center;gap:8px">
       <div id="inst-count" style="font-size:13px;color:var(--text3)"></div>
-      <button onclick="exportExcel()" style="display:flex;align-items:center;gap:5px;font-size:13px;padding:6px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--green-bg);color:var(--green-txt);cursor:pointer;font-weight:500">📊 Excel</button>
+      <button onclick="importJSON()" title="Εισαγωγή δεδομένων από αρχείο JSON" style="display:flex;align-items:center;gap:5px;font-size:13px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;font-weight:500">📂</button>
+      <button onclick="exportJSON()" title="Εξαγωγή δεδομένων σε αρχείο JSON" style="display:flex;align-items:center;gap:5px;font-size:13px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--blue-bg);color:var(--blue-txt);cursor:pointer;font-weight:500">💾 JSON</button>
+      <button onclick="exportExcel()" style="display:flex;align-items:center;gap:5px;font-size:13px;padding:6px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--green-bg);color:var(--green-txt);cursor:pointer;font-weight:500">📊 Excel</button>
     </div>
   </div>
 </div>
@@ -132,6 +134,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 </div>
 
 <button class="add-fab" onclick="openAddModal()" aria-label="Προσθήκη δόσης">＋</button>
+
+<input type="file" id="json-file-input" accept=".json" style="display:none" onchange="handleJSONImport(event)">
+
+<div id="toast" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px)+80px);left:50%;transform:translateX(-50%);background:var(--text);color:var(--surface);padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:200;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.3)"></div>
 
 <div class="overlay" id="overlay" onclick="handleOverlayClick(event)">
 <div class="modal" id="modal-box">
@@ -202,23 +208,54 @@ const fmt=n=>'€'+Number(n).toLocaleString('el-GR',{minimumFractionDigits:2,max
 const fmtD=s=>{if(!s)return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`};
 function daysUntil(s){if(!s)return null;const n=new Date();n.setHours(0,0,0,0);const d=new Date(s);d.setHours(0,0,0,0);return Math.round((d-n)/86400000)}
 
-let data=JSON.parse(localStorage.getItem('doseis-pwa-v1')||'null')||{banks:{
-  'Alpha Bank':{color:'#178BCA',cards:{'Visa Platinum *1234':[
-    {id:1,store:'Πλαίσιο',product:'Laptop Dell',amt:120,total:12,paid:3,nextDate:'2026-06-10'},
-    {id:2,store:'Media Markt',product:'Ψυγείο Samsung',amt:85,total:24,paid:7,nextDate:'2026-06-10'}
-  ]}},
-  'Eurobank':{color:'#E24B4A',cards:{'Mastercard Gold *5678':[
-    {id:3,store:'Leroy Merlin',product:'Κλιματιστικό',amt:200,total:6,paid:2,nextDate:'2026-06-20'}
-  ]}},
-  'Εθνική':{color:'#1D9E75',cards:{'Visa Classic *9012':[
-    {id:4,store:'ΙΚΕΑ',product:'Οικοσκευή',amt:150,total:10,paid:1,nextDate:'2026-06-05'},
-    {id:5,store:'Kotsovolos',product:'Πλυντήριο',amt:90,total:18,paid:5,nextDate:'2026-06-05'}
-  ]}}
-}};
-let nextId=100;
+const STORAGE_KEY='doseis-pwa-v1';
+let data=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null')||{banks:{}};
+let nextId=Math.max(100,...Object.values(data.banks).flatMap(b=>Object.values(b.cards).flat().map(i=>i.id||0)))+1;
 let collapsed={};
 let editTarget=null;
-function save(){localStorage.setItem('doseis-pwa-v1',JSON.stringify(data))}
+
+function save(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}
+
+function showToast(msg,ms=2500){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.display='block';
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.style.display='none',ms);
+}
+
+function exportJSON(){
+  const payload={version:1,exportedAt:new Date().toISOString(),data};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  const now=new Date();
+  a.href=URL.createObjectURL(blob);
+  a.download=`doseis_backup_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.json`;
+  a.click();URL.revokeObjectURL(a.href);
+  showToast('✅ Backup JSON αποθηκεύτηκε!');
+}
+
+function importJSON(){document.getElementById('json-file-input').click()}
+
+function handleJSONImport(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const parsed=JSON.parse(ev.target.result);
+      const imported=parsed.data||parsed; // support both wrapped & raw format
+      if(!imported.banks)throw new Error('Μη έγκυρη μορφή αρχείου');
+      if(!confirm(`Εισαγωγή δεδομένων από "${file.name}";\n\nΤα τρέχοντα δεδομένα θα αντικατασταθούν.`)){e.target.value='';return}
+      data=imported;
+      nextId=Math.max(100,...Object.values(data.banks).flatMap(b=>Object.values(b.cards).flat().map(i=>i.id||0)))+1;
+      save();render();
+      showToast('✅ Δεδομένα εισήχθησαν επιτυχώς!');
+    }catch(err){
+      alert('Σφάλμα εισαγωγής: '+err.message);
+    }
+    e.target.value='';
+  };
+  reader.readAsText(file);
+}
 
 function allInsts(){
   const a=[];
